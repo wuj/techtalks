@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transformer Explorer</title>
+
+  <link rel="stylesheet" href="/bulma.min.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+
+<!-- ============================================================
+     LOADING OVERLAY
+     Shown while JSON data files are being fetched.
+     Removed by behaviors.js once all data is loaded.
+     ============================================================ -->
+<div id="app-loader" class="hero is-fullheight">
+  <div class="hero-body">
+    <div class="container has-text-centered">
+      <h1 class="title">Transformer Explorer</h1>
+      <p class="subtitle" id="loader-status">Loading demo data…</p>
+      <progress class="progress is-primary is-medium" max="100" id="loader-progress">Loading</progress>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     APP SHELL (hidden until data loads)
+     ============================================================ -->
+<div id="app" class="is-hidden">
+
+  <!-- NAVBAR -->
+  <nav class="navbar" role="navigation" aria-label="main navigation">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="#">
+        <strong>Transformer Explorer</strong>
+      </a>
+    </div>
+    <div class="navbar-end">
+      <div class="navbar-item">
+        <span class="tag is-light" id="app-session-badge">Session 1</span>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- VIEW TABS -->
+  <section class="section pt-3 pb-0">
+    <div class="container">
+      <div class="tabs is-boxed is-medium" id="view-tabs">
+        <ul>
+          <!-- Session 1 -->
+          <li class="is-active" data-view="tokenizer" data-session="1">
+            <a>Tokenizer</a>
+          </li>
+          <li data-view="onehot" data-session="1">
+            <a>One-Hot Encoding</a>
+          </li>
+          <li data-view="embeddings" data-session="1">
+            <a>Embedding Space</a>
+          </li>
+          <!-- Session 2 -->
+          <li data-view="attention" data-session="2">
+            <a>Self-Attention</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       VIEW 1: TOKENIZER
+       Session 1 — "How do transformers see text?"
+       ============================================================ -->
+  <section id="view-tokenizer" class="section view-panel">
+    <div class="container">
+
+      <!-- Input area -->
+      <div class="box" id="tokenizer-input-area">
+        <div class="field">
+          <label class="label" for="tokenizer-input">Type or paste text to tokenize</label>
+          <div class="control">
+            <textarea
+              class="textarea"
+              id="tokenizer-input"
+              placeholder="Try: unbelievably, code snippets, emoji, names…"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+        <div class="field is-grouped">
+          <div class="control">
+            <button class="button is-primary" id="tokenizer-submit">Tokenize</button>
+          </div>
+          <div class="control">
+            <button class="button is-light" id="tokenizer-clear">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Curated examples -->
+      <div class="box" id="tokenizer-examples-area">
+        <p class="heading">Surprise Examples</p>
+
+        <!-- Category buttons — JS populates from tokenizer_examples.json -->
+        <div class="buttons are-small" id="tokenizer-categories">
+          <!-- e.g. <button class="button" data-category="subword_splitting">✂️ Subword Splitting</button> -->
+        </div>
+
+        <!-- Example list for selected category — JS populates on category click -->
+        <div id="tokenizer-examples-list" class="is-hidden">
+          <table class="table is-hoverable is-fullwidth is-narrow">
+            <thead>
+              <tr>
+                <th>Text</th>
+                <th>Tokens</th>
+              </tr>
+            </thead>
+            <tbody id="tokenizer-examples-tbody">
+              <!-- e.g. <tr data-example-index="0"><td>"unbelievably"</td><td>3</td></tr> -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Token output -->
+      <div class="box" id="tokenizer-output-area">
+        <div class="level">
+          <div class="level-left">
+            <p class="heading">Tokens</p>
+          </div>
+          <div class="level-right">
+            <p class="is-size-7" id="tokenizer-stats">
+              <!-- e.g. "8 tokens · 42 characters · 5.3 chars/token" -->
+            </p>
+          </div>
+        </div>
+
+        <!-- Primary tokenizer output — JS renders colored token chips here -->
+        <div id="tokenizer-output" class="content">
+          <!-- e.g.
+            <span class="tag is-medium" data-token-id="359" style="background:#a8d8ea">un</span>
+            <span class="tag is-medium" data-token-id="1425" style="background:#ffaaa5">believ</span>
+            ...
+          -->
+          <p class="has-text-grey-light is-italic">Enter text above and click Tokenize</p>
+        </div>
+      </div>
+
+      <!-- Cross-tokenizer comparison (collapsed by default) -->
+      <div class="box" id="tokenizer-comparison-area">
+        <div class="level">
+          <div class="level-left">
+            <p class="heading">Cross-Tokenizer Comparison</p>
+          </div>
+          <div class="level-right">
+            <button class="button is-small is-light" id="tokenizer-comparison-toggle">
+              Show Comparison
+            </button>
+          </div>
+        </div>
+
+        <div id="tokenizer-comparison" class="is-hidden">
+          <!-- Row per tokenizer — JS populates -->
+          <div class="mb-3" id="tokenizer-comparison-gpt2">
+            <p class="has-text-weight-semibold is-size-7">GPT-2</p>
+            <div class="content" id="tokenizer-comparison-gpt2-tokens"></div>
+          </div>
+          <div id="tokenizer-comparison-bert">
+            <p class="has-text-weight-semibold is-size-7">BERT (WordPiece)</p>
+            <div class="content" id="tokenizer-comparison-bert-tokens"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Presenter annotation -->
+      <article class="message is-info is-small" id="tokenizer-annotation-area" class="is-hidden">
+        <div class="message-body" id="tokenizer-annotation">
+          <!-- Presenter-facing annotation for the current example -->
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       VIEW 2: ONE-HOT ENCODING
+       Session 1 — "Why one-hot vectors fail"
+       ============================================================ -->
+  <section id="view-onehot" class="section view-panel is-hidden">
+    <div class="container">
+
+      <!-- Step navigation -->
+      <nav class="level" id="onehot-controls">
+        <div class="level-left">
+          <div class="level-item">
+            <button class="button" id="onehot-prev" disabled>
+              ← Previous
+            </button>
+          </div>
+        </div>
+        <div class="level-item has-text-centered">
+          <div>
+            <p class="heading">Animation Step</p>
+            <p id="onehot-step-indicator">Step 1 of 6</p>
+          </div>
+        </div>
+        <div class="level-right">
+          <div class="level-item">
+            <button class="button is-primary" id="onehot-next">
+              Next →
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Visualization area -->
+      <!-- JS / D3 renders one-hot vector cells, highlights, and
+           the animated dot-product computation inside this container. -->
+      <div class="box" id="onehot-visualization" role="img"
+           aria-label="One-hot encoding vector visualization">
+        <p class="has-text-grey-light has-text-centered is-italic">
+          Press Next to begin
+        </p>
+      </div>
+
+      <!-- Narration -->
+      <article class="message is-dark">
+        <div class="message-body" id="onehot-narration">
+          <!-- Narration text for the current animation step -->
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       VIEW 3: EMBEDDING SPACE EXPLORER
+       Session 1 — "Meaning as geometry"
+       ============================================================ -->
+  <section id="view-embeddings" class="section view-panel is-hidden">
+    <div class="container">
+
+      <!-- Search bar + Clusters -->
+      <div class="box" id="embedding-controls">
+
+        <!-- Search -->
+        <div class="field has-addons">
+          <div class="control is-expanded">
+            <input class="input" id="embedding-search" type="text"
+                   placeholder="Search for a word (e.g. king, pizza, bank)…"
+                   autocomplete="off">
+          </div>
+          <div class="control">
+            <button class="button is-primary" id="embedding-search-btn">Search</button>
+          </div>
+          <div class="control">
+            <button class="button is-light" id="embedding-reset-btn">Reset</button>
+          </div>
+        </div>
+
+        <!-- Out-of-vocabulary notice -->
+        <p class="help is-danger is-hidden" id="embedding-oov-notice">
+          Word not found in vocabulary. Try another word.
+        </p>
+
+        <!-- Cluster buttons — JS populates from embeddings_projected.json -->
+        <div class="field">
+          <p class="heading">Explore Clusters</p>
+          <div class="buttons are-small" id="embedding-casefiles">
+            <!-- e.g. <button class="button" data-casefile="royalty" style="border-color:#9B59B6">
+                        👑 Royalty</button> -->
+          </div>
+        </div>
+
+        <!-- Dimension toggle -->
+        <div class="field">
+          <div class="control">
+            <label class="radio">
+              <input type="radio" name="embedding-dim" value="2d" id="embedding-dim-2d" checked>
+              2D
+            </label>
+            <label class="radio">
+              <input type="radio" name="embedding-dim" value="3d" id="embedding-dim-3d">
+              3D
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main two-panel layout: scatter plot | neighbors -->
+      <div class="columns">
+
+        <!-- Scatter plot -->
+        <div class="column is-8">
+          <div class="box">
+            <div id="embedding-plot" style="min-height:500px;"
+                 role="img" aria-label="2D scatter plot of word embeddings">
+              <!-- Plotly renders here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Nearest neighbors panel -->
+        <div class="column is-4">
+          <div class="box" id="embedding-neighbors-panel">
+            <div class="content">
+              <p class="heading">
+                Nearest Neighbors
+                <span class="has-text-weight-normal" id="embedding-selected-word"></span>
+              </p>
+              <ol id="embedding-neighbors-list">
+                <!-- JS populates:
+                  <li>
+                    <span class="neighbor-word">queen</span>
+                    <span class="neighbor-score has-text-grey">0.842</span>
+                  </li>
+                -->
+                <li class="has-text-grey-light is-italic">Search or click a word to see neighbors</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analogy playground -->
+      <div class="box" id="embedding-analogy-area">
+        <p class="heading">Analogy Playground</p>
+        <p class="is-size-7 mb-3">
+          Vector arithmetic: <strong>A</strong> - <strong>B</strong> + <strong>C</strong> = ?
+        </p>
+        <div class="columns is-vcentered">
+          <div class="column is-narrow">
+            <div class="field">
+              <label class="label" for="embedding-analogy-a">A</label>
+              <div class="control">
+                <input class="input" id="embedding-analogy-a" type="text"
+                       placeholder="king" autocomplete="off">
+              </div>
+            </div>
+          </div>
+          <div class="column is-narrow">
+            <span class="is-size-4">-</span>
+          </div>
+          <div class="column is-narrow">
+            <div class="field">
+              <label class="label" for="embedding-analogy-b">B</label>
+              <div class="control">
+                <input class="input" id="embedding-analogy-b" type="text"
+                       placeholder="man" autocomplete="off">
+              </div>
+            </div>
+          </div>
+          <div class="column is-narrow">
+            <span class="is-size-4">+</span>
+          </div>
+          <div class="column is-narrow">
+            <div class="field">
+              <label class="label" for="embedding-analogy-c">C</label>
+              <div class="control">
+                <input class="input" id="embedding-analogy-c" type="text"
+                       placeholder="woman" autocomplete="off">
+              </div>
+            </div>
+          </div>
+          <div class="column is-narrow">
+            <span class="is-size-4">=</span>
+          </div>
+          <div class="column is-narrow">
+            <div class="control">
+              <button class="button is-primary" id="embedding-analogy-submit">Compute</button>
+            </div>
+          </div>
+          <div class="column">
+            <p id="embedding-analogy-result" class="has-text-weight-bold">
+              <!-- e.g. "queen (0.891)" -->
+            </p>
+          </div>
+        </div>
+
+        <!-- Analogy nearest-neighbor results list -->
+        <div id="embedding-analogy-neighbors" class="is-hidden">
+          <ol id="embedding-analogy-neighbors-list">
+            <!-- JS populates top-N results for the analogy vector -->
+          </ol>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       VIEW 4: SELF-ATTENTION
+       Session 2 — "How does a word know what it means?"
+       ============================================================ -->
+  <section id="view-attention" class="section view-panel is-hidden">
+    <div class="container">
+
+      <!-- Controls row: sentence, layer, head -->
+      <div class="box" id="attention-controls">
+        <div class="columns is-vcentered">
+
+          <!-- Sentence selector -->
+          <div class="column is-5">
+            <div class="field">
+              <label class="label is-small" for="attention-sentence-select">Sentence</label>
+              <div class="control">
+                <div class="select is-fullwidth">
+                  <select id="attention-sentence-select">
+                    <!-- JS populates from attention_data.json:
+                      <option value="bank_combined">The bank by the river was steep…</option>
+                      <option value="bank_river">I sat on the bank of the river.</option>
+                      <option value="bank_finance">I deposited cash at the bank.</option>
+                    -->
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Layer selector -->
+          <div class="column is-2">
+            <div class="field">
+              <label class="label is-small" for="attention-layer-select">Layer</label>
+              <div class="control">
+                <div class="select is-fullwidth">
+                  <select id="attention-layer-select">
+                    <!-- JS populates: <option value="0">0</option> … <option value="11">11</option> -->
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Head selector -->
+          <div class="column is-2">
+            <div class="field">
+              <label class="label is-small" for="attention-head-select">Head</label>
+              <div class="control">
+                <div class="select is-fullwidth">
+                  <select id="attention-head-select">
+                    <!-- JS populates: <option value="0">0</option> … <option value="11">11</option> -->
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Best head button -->
+          <div class="column is-3">
+            <div class="field">
+              <label class="label is-small">&nbsp;</label>
+              <div class="control">
+                <button class="button is-info is-fullwidth" id="attention-best-btn">
+                  Use Best Head
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clickable sentence tokens -->
+      <div class="box" id="attention-sentence-area">
+        <p class="heading">
+          Click a token to inspect its attention pattern
+          <span class="has-text-weight-normal" id="attention-selected-token"></span>
+        </p>
+
+        <!-- JS renders clickable token chips here -->
+        <div id="attention-tokens" role="group" aria-label="Sentence tokens">
+          <!-- e.g.
+            <span class="tag is-medium is-clickable" data-token-index="0">The</span>
+            <span class="tag is-medium is-clickable is-warning" data-token-index="1">bank</span>
+            ...
+          -->
+        </div>
+      </div>
+
+      <!-- Three-panel layout: static neighbors | heatmap | contextual neighbors -->
+      <div class="columns" id="attention-main-panels">
+
+        <!-- Left: static neighbors (before) -->
+        <div class="column is-3">
+          <div class="box" id="attention-static-panel">
+            <div class="content">
+              <p class="heading">Before (Static Embedding)</p>
+              <ol id="attention-static-neighbors">
+                <!-- JS populates:
+                  <li><span>loans</span> <span class="has-text-grey">0.84</span></li>
+                -->
+                <li class="has-text-grey-light is-italic">Click a token above</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center: attention heatmap -->
+        <div class="column is-6">
+          <div class="box" id="attention-heatmap-panel">
+            <p class="heading">Attention Weights</p>
+            <div id="attention-heatmap" role="img"
+                 aria-label="Attention weight heatmap">
+              <!-- D3 renders SVG heatmap here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: contextual neighbors (after) -->
+        <div class="column is-3">
+          <div class="box" id="attention-contextual-panel">
+            <div class="content">
+              <p class="heading">After (Contextual Embedding)</p>
+              <ol id="attention-contextual-neighbors">
+                <!-- JS populates -->
+                <li class="has-text-grey-light is-italic">Click a token above</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q/K/V and temperature controls -->
+      <div class="box" id="attention-secondary-controls">
+        <div class="columns is-vcentered">
+
+          <!-- Q/K/V toggle -->
+          <div class="column is-narrow">
+            <button class="button is-small" id="attention-qkv-toggle"
+                    data-active="false">
+              Show Q / K / V Vectors
+            </button>
+          </div>
+
+          <!-- Softmax temperature slider -->
+          <div class="column">
+            <div class="field is-horizontal">
+              <div class="field-label is-small">
+                <label class="label" for="attention-temperature">Temperature</label>
+              </div>
+              <div class="field-body">
+                <div class="field has-addons">
+                  <div class="control is-expanded">
+                    <input class="input is-small" id="attention-temperature"
+                           type="range" min="0.1" max="5" step="0.1" value="1">
+                  </div>
+                  <div class="control">
+                    <span class="tag" id="attention-temperature-value">1.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q/K/V vector display (collapsed by default) -->
+      <div class="box is-hidden" id="attention-qkv-display">
+        <p class="heading">Q / K / V Vectors</p>
+        <div class="columns">
+          <div class="column">
+            <p class="has-text-weight-semibold is-size-7"
+               style="color: var(--color-query, #E74C3C);">Query (Q)</p>
+            <div id="attention-qkv-query">
+              <!-- D3 renders horizontal bar chart for Q vector -->
+            </div>
+          </div>
+          <div class="column">
+            <p class="has-text-weight-semibold is-size-7"
+               style="color: var(--color-key, #2980B9);">Key (K)</p>
+            <div id="attention-qkv-key">
+              <!-- D3 renders horizontal bar chart for K vector -->
+            </div>
+          </div>
+          <div class="column">
+            <p class="has-text-weight-semibold is-size-7"
+               style="color: var(--color-value, #27AE60);">Value (V)</p>
+            <div id="attention-qkv-value">
+              <!-- D3 renders horizontal bar chart for V vector -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2D Sentence Projection -->
+      <div class="box" id="attention-projection-area">
+        <div class="level">
+          <div class="level-left">
+            <p class="heading">Token Positions Across Layers</p>
+          </div>
+          <div class="level-right">
+            <div class="level-item">
+              <button class="button is-small is-light" id="attention-play-btn">
+                ▶ Play
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Layer scrub slider -->
+        <div class="field is-horizontal mb-2">
+          <div class="field-label is-small">
+            <label class="label" for="attention-layer-slider">Layer</label>
+          </div>
+          <div class="field-body">
+            <div class="field has-addons">
+              <div class="control is-expanded">
+                <input class="input is-small" id="attention-layer-slider"
+                       type="range" min="0" max="12" step="1" value="0">
+              </div>
+              <div class="control">
+                <span class="tag" id="attention-layer-slider-value">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="attention-projection" style="min-height:350px;"
+             role="img" aria-label="2D projection of token positions across transformer layers">
+          <!-- Plotly renders here -->
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       SHARED: TOOLTIP
+       Positioned absolutely by JS. Used for attention heatmap
+       cell hover (Q·K score) and other interactive details.
+       ============================================================ -->
+  <div id="tooltip" class="box p-2 is-hidden"
+       style="position:fixed; z-index:100; pointer-events:none;"
+       role="tooltip">
+    <p class="is-size-7" id="tooltip-text"></p>
+  </div>
+
+</div><!-- /app -->
+
+
+<!-- ============================================================
+     SCRIPTS
+     ============================================================ -->
+
+<!-- Plotly.js — scatter plots (embedding explorer, sentence projection) -->
+<script src="/plotly-3.3.0.min.js"></script>
+
+<!-- D3.js v7 — attention heatmap, one-hot animation, Q/K/V bars -->
+<script src="/d3.v7.min.js"></script>
+
+<!-- gpt-tokenizer for live client-side tokenization.
+     Provides a global `GPTTokenizer_cl100k_base` when loaded via UMD. -->
+<!-- <script src="https://unpkg.com/gpt-tokenizer@2.3.0/dist/cl100k_base.js"></script> -->
+<script src="/cl100k_base.js"></script>
+
+
+
+<!-- Application logic -->
+<script src="/behaviors.js"></script>
+
+</body>
+</html>
