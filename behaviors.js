@@ -28,11 +28,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ANALOGY_RESULT_COUNT = 5;
   const HEATMAP_COLOR_SCALE  = d3.interpolateBlues;
   const QKV_COLORS           = { q: '#E74C3C', k: '#2980B9', v: '#27AE60' };
-  const GENERAL_DOT_COLOR    = '#333333';
+  const GENERAL_DOT_COLOR    = '#9A9DC4';
   const SELECTED_DOT_COLOR   = '#E74C3C';
-  const SELECTED_DOT_SIZE    = 16;
-  const DEFAULT_DOT_SIZE     = 4;
-  const CATEGORY_DOT_SIZE    = 7;
+  const SELECTED_DOT_SIZE    = 72;
+  const DEFAULT_DOT_SIZE     = 18;
+  const CATEGORY_DOT_SIZE    = 32;
+  const DEFAULT_DOT_OPACITY  = 0.25;
+  const CATEGORY_DOT_OPACITY = 0.7;
+  const SELECTED_DOT_OPACITY = 0.9;
   const ANIMATION_STEP_MS    = 600;
   const EMBED_3D_CAMERA_DEFAULT = {
     eye: { x: 1.5, y: 1.5, z: 1.5 },
@@ -427,13 +430,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const promises = entries.map(async ([key, url]) => {
       try {
-        dom.loaderStatus.textContent = `Loading ${key}…`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
         state.data[key] = await resp.json();
         loaded++;
         dom.loaderProgress.value = loaded;
-        dom.loaderStatus.textContent = `Loaded ${loaded}/${entries.length}…`;
+        dom.loaderStatus.textContent = `Loaded ${loaded} of ${entries.length}…`;
       } catch (err) {
         console.error(`Failed to load ${url}:`, err);
         dom.loaderStatus.textContent = `Error loading ${key}. Check console.`;
@@ -530,7 +532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return ids.map(id => {
         let decoded;
         try { decoded = liveTokenizer.decode([id]); }
-        catch { decoded = `[${id}]`; }
+        catch (e) { decoded = `[${id}]`; }
         return { id, text: decoded };
       });
     } catch (err) {
@@ -718,7 +720,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Highlight active row
     dom.tokExamplesTbody.querySelectorAll('tr').forEach(tr => {
-      tr.classList.toggle('is-selected', parseInt(tr.dataset.exampleIndex) === idx);
+      tr.classList.toggle('is-selected', parseInt(tr.dataset.exampleIndex, 10) === idx);
     });
   }
 
@@ -728,6 +730,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     hideAnnotation();
     clearChildren(dom.tokCompGpt2);
     clearChildren(dom.tokCompBert);
+
+    // Reset Surprise Examples panel
+    state.tokenizer.currentCategory = null;
+    state.tokenizer.currentExampleIndex = null;
+    dom.tokCategories.querySelectorAll('button').forEach(btn => {
+      btn.classList.remove('is-primary');
+    });
+    clearChildren(dom.tokExamplesTbody);
+    hide(dom.tokExamplesList);
   }
 
   function showAnnotation(text) {
@@ -745,7 +756,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ============================================================
 
   function initOneHot() {
-    const sequence = state.data.tokenizer.oneHotDemo.animationSequence;
+    const oneHotDemo = state.data.tokenizer?.oneHotDemo;
+    if (!oneHotDemo?.animationSequence) {
+      console.error('One-hot demo data missing');
+      dom.ohNarration.textContent = 'Demo data unavailable.';
+      return;
+    }
+    const sequence = oneHotDemo.animationSequence;
     state.onehot.totalSteps = sequence.length;
     state.onehot.currentStep = 0;
 
@@ -775,10 +792,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Update narration
     dom.ohNarration.textContent = step.narration;
 
-    // Track which words to display
-    if (step.action === 'show_vector') {
-      if (!state.onehot.displayedWords.includes(step.word)) {
-        state.onehot.displayedWords.push(step.word);
+    // Rebuild displayedWords from step 0 through current step
+    state.onehot.displayedWords = [];
+    for (let s = 0; s <= stepIndex; s++) {
+      const prev = sequence[s];
+      if (prev.action === 'show_vector' && !state.onehot.displayedWords.includes(prev.word)) {
+        state.onehot.displayedWords.push(prev.word);
       }
     }
 
@@ -1019,12 +1038,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         marker: {
           color: colors,
           size: sizes.map(s => s * 0.8),
-          opacity: 0.6,
+          opacity: DEFAULT_DOT_OPACITY,
           line: { width: 0 },
         },
       };
       layout = {
         hovermode: 'closest',
+        hoverlabel: { font: { color: 'white' } },
         scene: {
           xaxis: { visible: false },
           yaxis: { visible: false },
@@ -1045,12 +1065,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         marker: {
           color: colors,
           size: sizes,
-          opacity: 0.6,
+          opacity: DEFAULT_DOT_OPACITY,
           line: { width: 0 },
         },
       };
       layout = {
         hovermode: 'closest',
+        hoverlabel: { font: { color: 'white' } },
         dragmode: 'pan',
         xaxis: { visible: false },
         yaxis: { visible: false, scaleanchor: 'x' },
@@ -1099,7 +1120,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (evt) {
           if (evt.type === 'contextmenu') return;
           if (typeof evt.button === 'number' && evt.button !== 0) return;
-          if (typeof evt.buttons === 'number' && evt.buttons !== 1) return;
         }
 
         if (eventData.points && eventData.points.length > 0) {
@@ -1190,6 +1210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const colors = [...state.embeddings.baseColors];
     const sizes  = [...state.embeddings.baseSizes];
+    const opacities = new Array(words.length).fill(DEFAULT_DOT_OPACITY);
 
     // Color active case files
     active.forEach(catId => {
@@ -1198,6 +1219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (w.categories.includes(catId)) {
           colors[i] = catColor;
           sizes[i] = CATEGORY_DOT_SIZE;
+          opacities[i] = CATEGORY_DOT_OPACITY;
         }
       });
     });
@@ -1208,17 +1230,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (idx >= 0) {
         colors[idx] = SELECTED_DOT_COLOR;
         sizes[idx] = SELECTED_DOT_SIZE;
+        opacities[idx] = SELECTED_DOT_OPACITY;
       }
     }
 
     // 3D scatter uses smaller marker sizes and doesn't support per-point opacity arrays
     const plotSizes = is3d ? sizes.map(s => s * 0.8) : sizes;
-    const opacities = is3d ? 0.7 : colors.map(c => c === GENERAL_DOT_COLOR ? 0.4 : 0.9);
+    const plotOpacities = is3d ? DEFAULT_DOT_OPACITY : opacities;
 
     swallowPlotlyRejection(Plotly.restyle(dom.embPlot, {
       'marker.color': [colors],
       'marker.size':  [plotSizes],
-      'marker.opacity': [opacities],
+      'marker.opacity': [plotOpacities],
     }, [0]), 'Embedding restyle failed');
   }
 
@@ -1547,10 +1570,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Compute weights: reapply softmax with temperature if temp !== 1
     let weights;
+    const layerWeights = sent.attentionWeights?.[layer];
+    const layerScores = sent.qkScores?.[layer];
+    if (!layerWeights?.[head] || !layerScores?.[head]) {
+      console.warn(`Invalid layer/head: ${layer}/${head}`);
+      return;
+    }
     if (Math.abs(temp - 1.0) < 0.01) {
-      weights = sent.attentionWeights[layer][head];
+      weights = layerWeights[head];
     } else {
-      const rawScores = sent.qkScores[layer][head];
+      const rawScores = layerScores[head];
       weights = rawScores.map(row => softmax(row.map(s => s / temp)));
     }
 
@@ -1571,6 +1600,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderHeatmap(tokens, weights, rawScores, specialMask) {
     const container = dom.attHeatmap;
+    
+    // Preserve container height during re-render to prevent scroll jump
+    // when content briefly collapses during clearChildren()
+    const currentHeight = container.offsetHeight;
+    if (currentHeight > 0) {
+      container.style.minHeight = currentHeight + 'px';
+    }
+    
     clearChildren(container);
 
     const n = tokens.length;
@@ -1643,6 +1680,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         .text(tok);
     });
 
+    // Remove min-height constraint now that SVG is rendered
+    container.style.minHeight = '';
+    
     state.attention.heatmapRendered = true;
   }
 
@@ -1753,8 +1793,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const sent = state.data.attention.sentences[sentId];
     const layerKey = String(state.attention.projectionLayer);
-    const positions = sent.sentenceProjections[layerKey];
-    if (!positions) return;
+    const positions = sent.sentenceProjections?.[layerKey];
+    if (!positions) {
+      clearChildren(dom.attProjection);
+      dom.attProjection.innerHTML = '<p class="has-text-grey has-text-centered p-4">No projection data for layer ' + layerKey + '</p>';
+      return;
+    }
 
     const tokens = sent.tokens;
     const special = sent.specialTokenMask;
@@ -1866,3 +1910,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
 });
+
+

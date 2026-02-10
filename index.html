@@ -19,7 +19,7 @@
 <div id="app-loader" class="hero is-fullheight">
   <div class="hero-body">
     <div class="container has-text-centered">
-      <h1 class="title">Transformer Explorer</h1>
+      <h1 class="title">Tech Talks</h1>
       <p class="subtitle" id="loader-status">Loading demo data…</p>
       <progress class="progress is-primary is-medium" max="100" id="loader-progress">Loading</progress>
     </div>
@@ -36,7 +36,7 @@
   <nav class="navbar" role="navigation" aria-label="main navigation">
     <div class="navbar-brand">
       <a class="navbar-item" href="#">
-        <strong>Transformer Explorer</strong>
+        <strong>Tech Talks</strong>
       </a>
     </div>
     <div class="navbar-end">
@@ -104,7 +104,7 @@
 
       <!-- Curated examples -->
       <div class="box" id="tokenizer-examples-area">
-        <p class="heading">Surprise Examples</p>
+        <p class="heading">Curated (Surprise) Examples</p>
 
         <!-- Category buttons — JS populates from tokenizer_examples.json -->
         <div class="buttons are-small" id="tokenizer-categories">
@@ -178,7 +178,7 @@
       </div>
 
       <!-- Presenter annotation -->
-      <article class="message is-info is-small" id="tokenizer-annotation-area" class="is-hidden">
+      <article class="message is-info is-small is-hidden" id="tokenizer-annotation-area">
         <div class="message-body" id="tokenizer-annotation">
           <!-- Presenter-facing annotation for the current example -->
         </div>
@@ -386,9 +386,11 @@
 
         <!-- Analogy nearest-neighbor results list -->
         <div id="embedding-analogy-neighbors" class="is-hidden">
-          <ol id="embedding-analogy-neighbors-list">
-            <!-- JS populates top-N results for the analogy vector -->
-          </ol>
+          <div class="content">
+            <ol id="embedding-analogy-neighbors-list">
+              <!-- JS populates top-N results for the analogy vector -->
+            </ol>
+          </div>
         </div>
       </div>
 
@@ -548,7 +550,7 @@
               <div class="field-body">
                 <div class="field has-addons">
                   <div class="control is-expanded">
-                    <input class="input is-small" id="attention-temperature"
+                    <input class="slider is-small" id="attention-temperature"
                            type="range" min="0.1" max="5" step="0.1" value="1">
                   </div>
                   <div class="control">
@@ -612,7 +614,7 @@
           <div class="field-body">
             <div class="field has-addons">
               <div class="control is-expanded">
-                <input class="input is-small" id="attention-layer-slider"
+                <input class="slider is-small" id="attention-layer-slider"
                        type="range" min="0" max="12" step="1" value="0">
               </div>
               <div class="control">
@@ -668,3 +670,4 @@
 
 </body>
 </html>
+

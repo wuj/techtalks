@@ -1,0 +1,6 @@
+/* Fixed width for Q/K/V toggle to prevent layout shift when text changes */
+#attention-qkv-toggle {
+  min-width: 11rem;
+}
+
+

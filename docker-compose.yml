@@ -6,3 +6,16 @@ services:
       - "80:80"
     volumes:
       - .:/usr/local/apache2/htdocs/
+
+  jupyter:
+    image: quay.io/jupyter/datascience-notebook:notebook-7.5.2
+    container_name: jupyter-notebook
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN}
+      CHOWN_HOME: "yes"
+      CHOWN_HOME_OPTS: "-R"
+    volumes:
+      - ".:/home/jovyan"
+    restart: unless-stopped
